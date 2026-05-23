@@ -1,86 +1,106 @@
-# MASM macOS CX
+# macsm
 
-Native C11 MASM/Irvine32-style runner for macOS on Apple Silicon.
+Native C11 MASM/Irvine32-style runner for macOS (supporting both Apple Silicon and Intel).
 
-`macsm` does not call MASM, NASM, Wine, QEMU, or a Windows VM. It parses a focused MASM-style `.asm` source file, lays out a flat 32-bit data/stack memory model, interprets a practical subset of x86 instructions, and provides built-in Irvine32-compatible console routines.
+`macsm` parses a focused MASM-style `.asm` source file, lays out a flat 32-bit data/stack memory model, interprets a practical subset of x86 instructions, and provides built-in Irvine32-compatible console routines—all without needing MASM, NASM, Wine, QEMU, or a Windows virtual machine.
 
-## Build
+---
 
-```sh
-make
+## 🚀 Getting Started on macOS
+
+There are two ways to get `macsm` running on your Mac.
+
+### Method 1: Easiest way (Via Homebrew)
+If you use [Homebrew](https://brew.sh/), you can install `macsm` globally with one command:
+
+```bash
+# Add the tap and install macsm
+brew tap jthom2/tap
+brew install macsm
 ```
 
-The only required compiler is the system C compiler available as `cc`/Apple clang.
-
-## Run
-
-```sh
-./macsm examples/hello.asm
-./macsm examples/sum_loop.asm
+Once installed, you can run any MASM `.asm` file from anywhere in your terminal:
+```bash
+macsm examples/demos/hello.asm
 ```
 
-Programs are run directly from `.asm` source. No executable, PE file, Mach-O file, or generated script is required.
+---
 
-Debug output is available without changing program stdout:
+### Method 2: For Developers (Compile from Source)
+If you want to build `macsm` manually or contribute to the project, you can compile it from source.
 
-```sh
-./macsm --trace examples/hello.asm
-./macsm --debug examples/sum_loop.asm
-./macsm --dump-symbols --dump-data examples/sum_loop.asm
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/jthom2/macsm.git
+   cd macsm
+   ```
+
+2. **Build the Binary**:
+   The only required tool is the system C compiler (`clang` or `cc`, available by default via macOS Command Line Tools):
+   ```bash
+   make
+   ```
+
+3. **Run the Examples**:
+   ```bash
+   ./macsm examples/demos/hello.asm
+   ./macsm examples/demos/sum_loop.asm
+   ```
+
+---
+
+## 🛠️ Usage & Debugging
+
+`macsm` runs programs directly from `.asm` source. No linker, PE executable, or Mach-O generation is required.
+
+### Debug Output & Tracing
+Get deep diagnostic output without changing your program's stdout:
+```bash
+# Trace every executed instruction, registers, and flags to stderr
+macsm --trace examples/demos/hello.asm
+
+# Dump symbol tables and flat memory layouts
+macsm --dump-symbols --dump-data examples/demos/sum_loop.asm
 ```
 
-`--trace` writes one stderr line per instruction with EIP, source line, registers, and flags. `--dump-symbols` and `--dump-data` write parser/data-layout details to stderr after parsing.
-
-`--debug` starts an interactive debugger before the entry instruction. Debugger prompts and responses are written to stderr with a `debug:` prefix, so target program stdout stays byte-for-byte unchanged. Commands are read from stdin: `b <line|label|file:line>`, `c`, `s`, `n`, `p <reg|expr>`, `x/<n><b|w|d> <addr|expr>`, `regs`, `bt`, and `q`. Backtraces are best-effort through the EBP frame chain and stop after 16 frames.
-
-Static compatibility checks are available without executing the program:
-
-```sh
-./macsm --check examples/hello.asm
+### Interactive Debugger
+Start an interactive console debugger before the entry instruction:
+```bash
+macsm --debug examples/demos/sum_loop.asm
 ```
+Inside the debugger, you can use standard GDB-style command abbreviations:
+- `b <line|label>` to set a breakpoint
+- `s` to step into an instruction
+- `n` to step over
+- `c` to continue execution
+- `regs` to show current registers
+- `bt` to print best-effort call backtraces
+- `q` to quit
 
-`--check` writes a human-readable report to stdout. Findings use `file:line:col`, source-line carets, category labels, and near-match hints where available. It exits `0` when a file is fully supported by the current runner and `1` when unsupported directives, instructions, data declarations, calls, unresolved labels/symbols, or expression forms are found. It cannot be combined with execution debug flags.
+### Static Compatibility Check
+Verify if a file is supported without executing it:
+```bash
+macsm --check examples/demos/hello.asm
+```
+`--check` returns a diagnostic report and carets showing syntax errors or unsupported directives. It exits with code `0` if fully supported and `1` if any unsupported features are found.
 
-## Supported v1 surface
+---
 
-- MASM setup and layout: `INCLUDE Irvine32.inc`, `INCLUDELIB Irvine32.lib`, `.386`, `.model flat, stdcall`, `.stack`, `.data`, `.code`, `PROTO`, `PROC`/`ENDP`, labels, `END main`.
-- Data declarations: `BYTE`/`DB`, `WORD`/`DW`, `DWORD`/`DD`, `SDWORD`, `QWORD`, `REAL4`, `REAL8`, strings, numeric and floating literals, `?`, `DUP`, constants with `EQU` or `=`.
-- MASM operators: `OFFSET`, `TYPE`, `LENGTHOF`, `SIZEOF`, `$` in data expressions, parentheses, `*`, `/`, direct data labels, `[reg+offset]`, `label[index]`, and `BYTE/WORD/DWORD/REAL4/REAL8 PTR`.
-- Procedures, macros, and high-level flow: `PROC a:DWORD` parameters, `LOCAL` stack variables, parser-lowered `INVOKE`, `MACRO`/`ENDM` with named parameters/defaults and macro `LOCAL` labels, `ret imm`, `.IF`/`.ELSEIF`/`.ELSE`/`.ENDIF`, `.WHILE`/`.ENDW`, `.REPEAT`/`.UNTIL`, `.BREAK`, and `.CONTINUE`.
-- Structs and type aliases: `Name STRUCT`/`ENDS`, `TYPEDEF PTR`, `<...>` initializers, dot-field access (`label.field`, `[reg].field`, `[reg+offset].field`), and field-aware `TYPE`/`SIZEOF`/`LENGTHOF`.
-- Core instructions: `mov`, `movsx`, `movzx`, `lea`, `push`, `pop`, `call`, `ret`, `add`, `adc`, `sub`, `inc`, `dec`, `imul`, `mul`, `div`, `idiv`, `cdq`, `cmp`, `test`, `clc`, `stc`, `daa`, `jmp`, common `jcc` forms, `loop`, `and`, `or`, `xor`, `not`, `neg`, shifts, and `xchg`.
-- x87 FPU subset: `fld`, `fst`, `fstp`, `fild`, `fist`, `fistp`, `fldz`, `fld1`, `fchs`, `fabs`, `fadd`, `fsub`, `fsubr`, `fmul`, `fdiv`, `fdivr`, `faddp`, `fsubp`, `fmulp`, `fdivp`, `fcom`, `fcomp`, `fcompp`, `fnstsw ax`, and `sahf`.
-- Irvine32 shims: `WriteString`, `WriteChar`, `WriteInt`, `WriteDec`, `WriteHex`, `WriteBin`, `WriteFloat`, `ShowFPUStack`, `Crlf`, `ReadInt`, `ReadChar`, `ReadKey`, `ReadString`, `GetCommandTail`, `Randomize`, `RandomRange`, `DumpRegs`, `WaitMsg`, `GetMseconds`, `Delay`, plus host-file helpers `OpenInputFile`/`CreateOutputFile`/`ReadFromFile`/`WriteToFile`/`CloseFile` and no-op console helpers `SetTextColor`, `Clrscr`, and `Gotoxy`. Deterministic test seams: `MASMRUN_FAKE_MSECONDS`, `MASMRUN_FAKE_DELAY=1`.
-- Irvine32 `exit` macro behavior is supported as a pseudo-instruction.
-- Irvine32 color constants such as `red`, `blue`, `white`, `black`, and the common light variants are built in for `SetTextColor`-style expressions.
+## 📚 Supported MASM & Irvine32 Features
 
-Unsupported MASM syntax fails with a source line diagnostic instead of silently producing approximate behavior.
+- **Directives & Layout**: `INCLUDE Irvine32.inc`, `.model flat, stdcall`, `.stack`, `.data`, `.code`, `PROC`/`ENDP`, labels, and `END main`.
+- **Data Declarations**: `BYTE`, `WORD`, `DWORD`, `SDWORD`, `REAL4`, `REAL8`, arrays with `DUP`, `EQU`, and structures (`STRUCT`/`ENDS`).
+- **Operators**: `OFFSET`, `TYPE`, `LENGTHOF`, `SIZEOF`, and type-casting `PTR` operators.
+- **High-Level Flow**: HLL condition lowering including `.IF`, `.ELSEIF`, `.ELSE`, `.ENDIF`, `.WHILE`, `.REPEAT`, and `.UNTIL`.
+- **Instructions**: Standard data movement (`mov`, `lea`, `push`, `pop`), arithmetic (`add`, `sub`, `imul`, `div`, etc.), control flow (`jmp`, conditional jumps, `loop`), and bitwise operators (`and`, `or`, `xor`, etc.).
+- **x87 FPU Math**: Core floating-point subset including `fld`, `fstp`, `fadd`, `fsub`, `fmul`, `fdiv`, and FPU status checks.
+- **Irvine32 Library Shims**: Console IO (`WriteString`, `WriteChar`, `WriteDec`, `ReadInt`, etc.), helper routines (`RandomRange`, `GetMseconds`, `Delay`), and host file access (`OpenInputFile`, `ReadFromFile`, etc.).
 
-## Test
+---
 
-```sh
+## 🧪 Testing
+
+To run the local Python-based test suite, compile the binary and run:
+```bash
 make test
 ```
-
-The test suite uses only Python's standard `unittest` module. Add real VS/Irvine32 assignment files under `examples/` or extend `tests/test_masmrun.py` with fixture-specific stdin/stdout expectations as the compatibility corpus grows.
-
-The checked-in test suite also pins exact stdout for the current files in `x86_Win32_MASM_Examples/`.
-
-## Source layout
-
-- `masmrun.c`: CLI and mode selection.
-- `parser.c`: MASM sections, labels, data declarations, and instruction parsing.
-- `macro.c`: `MACRO`/`ENDM` collection, expansion, parameter/default substitution, and macro-local label renaming.
-- `hll.c`: condition lowering for MASM high-level control directives.
-- `expr.c`: MASM expression evaluation.
-- `runtime.c`: CPU state, operands, instruction execution, and trace.
-- `debugger.c`: interactive `--debug` commands, breakpoints, inspection, and EBP-chain backtraces.
-- `irvine32.c`: built-in Irvine32 routines.
-- `program.c`: symbols, memory, debug dumps, and cleanup.
-- `diagnostics.c`: shared diagnostic lists, source-line tracking, caret rendering, and fatal parse/runtime shims.
-- `check.c`: best-effort static compatibility reports using shared diagnostics.
-- `util.c`: shared string, token, literal, and file helpers.
-
-## Current limits
-
-This is not a full MASM assembler, Win32 emulator, or x87 hardware model. Real PE linking, GUI Win32 APIs, the full Irvine32 library, and cycle-accurate floating-point behavior are outside the current implementation.
